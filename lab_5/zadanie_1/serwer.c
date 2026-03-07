@@ -44,8 +44,6 @@ int main(int argc, char **argv)
     {
         if (errno != EEXIST)
             ERR("mkfifo create"); // jesli fifo nie istnieje to blad tworzenia
-        else
-            fprintf(stderr, "fifo already exists\n");
     }
     if ((fifo = open(argv[1], O_RDONLY)) < 0)
         ERR("open"); // otwieramy fifo do odczytu

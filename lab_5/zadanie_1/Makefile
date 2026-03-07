@@ -1,19 +1,21 @@
 # Kompilator i flagi
 CC = gcc
-CFLAGS = -Wall -Wextra -O2
+CFLAGS = -Wall -Wextra -O2 -D_GNU_SOURCE
 
-# Nazwa pliku wykonywalnego
-TARGET = serwer
-# Plik źródłowy
-SRC = serwer.c
+# Reguły specjalne (zabezpieczenie)
+.PHONY: all clean
 
-# Główna reguła (wywoływana po wpisaniu 'make')
-all: $(TARGET)
+# Główna reguła buduje OBA programy
+all: serwer client
 
-# Reguła kompilacji
-$(TARGET): $(SRC)
-	$(CC) $(CFLAGS) -o $(TARGET) $(SRC)
+# Reguła kompilacji serwera
+serwer: serwer.c
+	$(CC) $(CFLAGS) -o serwer serwer.c
 
-# Reguła czyszczenia (wywoływana po wpisaniu 'make clean')
+# Reguła kompilacji klienta
+client: client.c
+	$(CC) $(CFLAGS) -o client client.c
+
+# Reguła czyszczenia (usuwa oba programy)
 clean:
-	rm $(TARGET)
+	rm -f serwer client
