@@ -3,9 +3,9 @@ CC = gcc
 CFLAGS = -Wall -Wextra -O2
 
 # Nazwa pliku wykonywalnego
-TARGET = server
+TARGET = serwer
 # Plik źródłowy
-SRC = server.c
+SRC = serwer.c
 
 # Główna reguła (wywoływana po wpisaniu 'make')
 all: $(TARGET)
@@ -16,4 +16,4 @@ $(TARGET): $(SRC)
 
 # Reguła czyszczenia (wywoływana po wpisaniu 'make clean')
 clean:
-	rm -f $(TARGET)
+	rm $(TARGET)

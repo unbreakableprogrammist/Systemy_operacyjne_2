@@ -1,4 +1,4 @@
-#define _GNU_SOURCE_
+#define _GNU_SOURCE
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -53,6 +53,8 @@ int main(int argc, char **argv)
     read_from_fifo(fifo); // funkcja do odczytu danych z fifo
 
     if(close(fifo)<0) ERR("close fifo");
+
+    if(unlink(argv[1]) < 0) ERR("unlink"); // usuwamy fifo po zakonczeniu pracy programu
 
     return EXIT_SUCCESS;
 }
