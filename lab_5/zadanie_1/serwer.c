@@ -2,6 +2,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
@@ -18,16 +19,20 @@ void usage(char *name)
 void read_from_fifo(int fifo)
 {
     ssize_t count; // zmienna do zapisywania ile wczytamy z fifo
-    char c;
+    char buffer[PIPE_BUF]; // bufor na cala wiadomosc (PID + tekst)
 
     do
     {
-        count = TEMP_FAILURE_RETRY(read(fifo, &c, 1)); // czytamy sobie po znaku z fifo
+        count = TEMP_FAILURE_RETRY(read(fifo, buffer, PIPE_BUF)); // czytamy sobie cala wiadomosc z fifo
         if (count < 0)
             ERR("read"); // jesli read zwrocil -1 to oznacza ze byl jakis blad
         // jesli count == 0 to oznacza ze koniec wczytywania
-        if(count>0 && isalnum(c)) // isalnum - numer jest znany ludzkosci powiedzmy 
-            printf("%c",c);
+        if(count>0){ 
+            printf("\nPID :%d : \n", *((pid_t *)buffer));
+            for(int i=sizeof(pid_t);i<count;i++){
+                if(isalnum(buffer[i])) printf("%c",buffer[i]);
+            }
+        }
     } while (count > 0);
 }
 

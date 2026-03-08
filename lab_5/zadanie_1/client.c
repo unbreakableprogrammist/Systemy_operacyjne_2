@@ -23,7 +23,7 @@ void write_to_fifo(int fifo, int file) {
     char buffer[PIPE_BUF]; // bufor na cala wiadomosc (PID + tekst)
     char *buf;
 
-    // Zapisujemy PID binarnie na samym początku bufora
+    // najpierw robumy z buffe
     *((pid_t *)buffer) = getpid();
 
     // Ustawiamy wskaźnik czytania zaraz za zapisanym PID-em
