@@ -1,21 +1,21 @@
-# Kompilator i flagi (D_GNU_SOURCE jest tu kluczowe dla TEMP_FAILURE_RETRY!)
+# Kompilator i flagi
 CC = gcc
 CFLAGS = -Wall -Wextra -O2 -D_GNU_SOURCE
 
-# Nazwa pliku wynikowego i źródłowego
-TARGET = prog
-SRC = zad_2_1.c
-
-# Zabezpieczenie przed konfliktami nazw plików
+# Zabezpieczenie przed konfliktami nazw
 .PHONY: all clean
 
-# Główna reguła (wywoływana po wpisaniu 'make')
-all: $(TARGET)
+# Główna reguła - buduje oba programy naraz!
+all: prog1 prog2
 
-# Reguła kompilacji
-$(TARGET): $(SRC)
-	$(CC) $(CFLAGS) -o $(TARGET) $(SRC)
+# Reguła dla Etapu 1
+prog1: zad_2_1.c
+	$(CC) $(CFLAGS) -o prog1 zad_2_1.c
 
-# Reguła czyszczenia (wywoływana po wpisaniu 'make clean')
+# Reguła dla Etapu 2
+prog2: zad_2_2.c
+	$(CC) $(CFLAGS) -o prog2 zad_2_2.c
+
+# Reguła czyszczenia - usuwa oba pliki wynikowe
 clean:
-	rm -f $(TARGET)
+	rm -f prog1 prog2

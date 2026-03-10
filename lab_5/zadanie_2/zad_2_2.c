@@ -38,6 +38,7 @@ void sigint_parent(int sig){
 }
 
 void sigchild_handler(int sig){
+    usleep(20);
     pid_t pid;
     while(1){
         pid = waitpid(0, NULL, WNOHANG); 
