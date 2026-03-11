@@ -67,4 +67,25 @@ int main(int argc, char* argv[])
 {
     srand(time(NULL));
     printf("Opened descriptors: %d\n", count_descriptors());
+
+    char path_saraceni[30] = "saraceni.txt";
+    char path_franci[30] = "franci.txt";
+    int fd_saraceni = open(path_saraceni,O_RDONLY);
+    if (fd_saraceni == -1)
+        ERR("Saracens have not arrived on the battlefield");
+    int fd_franci = open(path_franci,O_RDONLY);
+    if (fd_franci == -1)
+        ERR("Francs have not arrived on the battlefield");
+    //printf("Opened descriptors: %d\n", count_descriptors());
+
+    
+
+
+
+
+    if(close(fd_saraceni) == -1)
+        ERR("close");
+    if(close(fd_franci) == -1)
+        ERR("close");
+    //printf("Opened descriptors: %d\n", count_descriptors());
 }
