@@ -2,20 +2,22 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -O2 -D_GNU_SOURCE
 
-# Nazwa pliku wynikowego i źródłowego
-TARGET = zadanie_1
-SRC = zadanie_1.c
+# Nazwy plików wynikowych
+TARGETS = zadanie_1 zadanie_2
 
-# Zabezpieczenie przed konfliktami nazw plików
+# Zabezpieczenie przed konfliktami nazw
 .PHONY: all clean
 
-# Główna reguła (wywoływana po wpisaniu 'make')
-all: $(TARGET)
+# Główna reguła (wywoływana po wpisaniu 'make') - kompiluje wszystko
+all: $(TARGETS)
 
-# Reguła kompilacji
-$(TARGET): $(SRC)
-	$(CC) $(CFLAGS) -o $(TARGET) $(SRC)
+# Reguły dla poszczególnych programów
+zadanie_1: zadanie_1.c
+	$(CC) $(CFLAGS) -o zadanie_1 zadanie_1.c
+
+zadanie_2: zadanie_2.c
+	$(CC) $(CFLAGS) -o zadanie_2 zadanie_2.c
 
 # Reguła czyszczenia (wywoływana po wpisaniu 'make clean')
 clean:
-	rm -f $(TARGET)
+	rm -f $(TARGETS)
