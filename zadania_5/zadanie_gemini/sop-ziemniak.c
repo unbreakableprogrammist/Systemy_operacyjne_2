@@ -3,16 +3,19 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 
-
+#define MAX_NODES 10
+#define MAX_NAME_LEN 64
 
 #define ERR(source) \
     (fprintf(stderr, "%s:%d\n", __FILE__, __LINE__), perror(source), kill(0, SIGKILL), exit(EXIT_FAILURE))
@@ -33,6 +36,7 @@ void msleep(int millisec)
     tt.tv_nsec = (millisec % 1000) * 1000000;
     while (nanosleep(&tt, &tt) == -1)
     {
+        if (errno != EINTR) ERR("nanosleep");
     }
 }
 
@@ -65,35 +69,20 @@ int count_descriptors()
     return count - 1;  // one descriptor for open directory
 }
 
+// Struktura pomocnicza do trzymania w pamięci danych o węźle
+typedef struct {
+    char nazwa[MAX_NAME_LEN];
+    int sasiedzi[MAX_NODES]; // Macierz jednowymiarowa dla danego węzła (1 = połączenie, 0 = brak)
+} Wezel;
+
+
+
+#include <fcntl.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #define MAX_KNIGHT_NAME_LENGHT 64
-
-void wczytaj_frankow_fopen() {
-    FILE *plik = fopen("franci.txt", "r");
-    if (plik == NULL) {
-        printf("Franks have not arrived on the battlefield\n"); // [cite: 15]
-        exit(EXIT_FAILURE);
-    }
-
-    int n;
-    // Czytamy pierwszą linię (liczbę rycerzy) [cite: 16]
-    if (fscanf(plik, "%d", &n) != 1) {
-        perror("Błąd czytania N");
-        exit(EXIT_FAILURE);
-    }
-
-    char imie[MAX_KNIGHT_NAME_LENGHT];
-    int hp, atak;
-
-    // Czytamy kolejne linie [cite: 17]
-    for (int i = 0; i < n; i++) {
-        fscanf(plik, "%s %d %d", imie, &hp, &atak);
-        printf("I am Frankish knight %s. I will serve my king with my %d HP and %d attack.\n", 
-               imie, hp, atak); // 
-    }
-
-    fclose(plik);
-}
 
 void wczytaj_frankow_open() {
     int fd = open("franci.txt", O_RDONLY);
@@ -135,29 +124,22 @@ void wczytaj_frankow_open() {
     close(fd);
 }
 
+
 int main(int argc, char* argv[])
 {
-    srand(time(NULL));
-    printf("Opened descriptors: %d\n", count_descriptors());
+    // Używamy naszego triku z poprzeniego zadania dla unikalnego ziarna!
+    srand(time(NULL) ^ getpid()); 
+    printf("Opened descriptors at start: %d\n", count_descriptors());
 
-    char path_saraceni[30] = "saraceni.txt";
-    char path_franci[30] = "franci.txt";
-    int fd_saraceni = open(path_saraceni,O_RDONLY);
-    if (fd_saraceni == -1)
-        ERR("Saracens have not arrived on the battlefield");
-    int fd_franci = open(path_franci,O_RDONLY);
-    if (fd_franci == -1)
-        ERR("Francs have not arrived on the battlefield");
-    //printf("Opened descriptors: %d\n", count_descriptors());
-
+    // --- ETAP 1: Parsowanie pliku siec.txt ---
+    FILE* siec = fopen(fra)
     
 
+    // --- ETAP 2: Tworzenie rur FIFO i procesów ---
 
+    // --- ETAP 3: Logika Gorącego Ziemniaka (w procesach potomnych) ---
 
+    // --- ETAP 4: Sprzątanie (czekanie na koniec, kill, unlink) w Rodzicu ---
 
-    if(close(fd_saraceni) == -1)
-        ERR("close");
-    if(close(fd_franci) == -1)
-        ERR("close");
-    //printf("Opened descriptors: %d\n", count_descriptors());
+    return EXIT_SUCCESS;
 }

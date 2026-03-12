@@ -28,7 +28,7 @@ Dla każdego węzła wypisuje komunikat:
 `Node <Nazwa> ready. I have <liczba_krawedzi> outgoing connections.`
 W przypadku błędu otwarcia pliku, wypisuje `Network is down` i kończy działanie.
 
-**Etap 2: Infrastruktura FIFO i Procesy (7 pkt) - *[Tu jest ten "sprytny" haczyk!]* **
+**Etap 2: Infrastruktura FIFO i Procesy (7 pkt) - *[Tu jest ten "sprytny" haczyk!]***
 Główny proces tworzy w systemie `N` kolejek FIFO (np. używając `mkfifo`), nazywając je odpowiednio `fifo_0`, `fifo_1`, ..., `fifo_N-1`.
 Zauważ: **nie robimy FIFO dla każdej krawędzi, tylko JEDNO wejściowe FIFO dla każdego węzła!** Jeśli wielu sąsiadów chce wysłać wiadomość do "Alfy", wszyscy piszą do `fifo_0`.
 Następnie rodzic tworzy `N` procesów potomnych (węzłów).
