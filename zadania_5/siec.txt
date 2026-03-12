@@ -1,6 +1,0 @@
-5
-Alfa 0 1 1 0 0
-Bravo 0 0 1 1 0
-Charlie 1 0 0 0 1
-Delta 1 0 0 0 1
-Echo 0 1 0 1 0

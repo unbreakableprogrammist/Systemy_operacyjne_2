@@ -45,6 +45,15 @@ void sigint_handler(int sig) { wyslij_wiadomosc = 1; }
 // Handler dla Ctrl+\ - kończy główną pętlę serwera
 void sigquit_handler(int sig) { dziala_program = 0; }
 
+int set_handler(void (*f)(int), int sig) {
+    struct sigaction act;
+    memset(&act, 0, sizeof(struct sigaction)); // Czyścimy strukturę
+    act.sa_handler = f;                        // Ustawiamy nasz handler
+    sigemptyset(&act.sa_mask);                 // Nie blokujemy dodatkowych sygnałów
+    act.sa_flags = 0;                          // Flagi na 0 (ważne przy pollingu!)
+    return sigaction(sig, &act, NULL);         // Rejestrujemy w systemie
+}
+
 int main(int argc, char* argv[]) {
     // Ziarno losowości unikalne dla procesu (czas + PID)
     srand(time(NULL) ^ getpid());
@@ -63,7 +72,7 @@ int main(int argc, char* argv[]) {
         if (fscanf(plik, "%s", wezly[i].nazwa) != 1) ERR("fscanf nazwa");
         wezly[i].liczba_sasiadow = 0;
         for (int j = 0; j < n; j++) {
-            if (fscanf(plik, "%d", &wezly[i].sasiedzi[j]) != 1) ERR("fscanf macierz");
+            if (fscanf(plik, "%d", &wezly[i].sasiedzi[j]) != 1) ERR("fscanf macierz"); 
             if (wezly[i].sasiedzi[j] == 1) wezly[i].liczba_sasiadow++;
         }
     }
@@ -97,16 +106,14 @@ int main(int argc, char* argv[]) {
             signal(SIGTERM, SIG_DFL);
 
             // Każde dziecko otwiera FIFO raportowe do zapisu.
-            int raport_fd = open(raport_fifo, O_WRONLY); 
-
-            // SPRZĄTANIE NIEPOTRZEBNYCH KOŃCÓWEK (Klucz do poprawnego IPC):
+            int raport_fd = open(raport_fifo, O_WRONLY );
             for (int j = 0; j < n; j++) {
                 if (i == j) {
                     // To moja rura: zamykam pisanie (rury[j][1]), zostawiam czytanie (rury[j][0])
                     close(rury[j][1]); 
                     // Ustawiam MOJE czytanie na NIEBLOKUJĄCE (O_NONBLOCK).
                     // Dzięki temu read() nie zatrzyma procesu, gdy rura jest pusta.
-                    fcntl(rury[j][0], F_SETFL, O_NONBLOCK); 
+                    // fcntl(rury[j][0], F_SETFL, O_NONBLOCK); 
                 } else {
                     // Nie czytam z cudzych rur - zamykam ich rury[j][0]
                     close(rury[j][0]); 
@@ -121,13 +128,13 @@ int main(int argc, char* argv[]) {
                 if (read(rury[i][0], &msg, sizeof(Wiadomosc)) == sizeof(Wiadomosc)) {
                     
                     // Rejestrujemy wizytę w tym węźle
-                    msg.path[msg.path_len++] = i; 
+                    msg.path[msg.path_len++] = i; // dopisujemy siebie do trasy 
                     msg.ttl--; // Wiadomość traci energię (zabezpieczenie przed cyklami)
 
                     if (msg.target_id == i) {
                         // SUKCES: To ja byłem celem!
                         printf("\n[%s] ZNALAZLEM! Wysylam sciezke do szefa przez FIFO.\n", wezly[i].nazwa);
-                        write(raport_fd, &msg, sizeof(Wiadomosc)); 
+                        write(raport_fd, &msg, sizeof(Wiadomosc)); // piszemy do glownego watku ze dotarlismy do celu
                     } 
                     else if (msg.ttl > 0 && wezly[i].liczba_sasiadow > 0) {
                         // PRZEKAZYWANIE: Szukamy losowego sąsiada z macierzy sąsiedztwa
@@ -148,23 +155,20 @@ int main(int argc, char* argv[]) {
                 // Krótki sen (50ms), żeby nie zużywać 100% CPU w pętli nieblokującej (polling)
                 usleep(50000); 
             }
-            // --- KONIEC KODU DZIECKA ---
         }
     }
 
     // ==========================================
     // ETAP 4: KOD RODZICA (SERWERA)
     // ==========================================
+    // sygnaly 
+    if (set_handler(sigint_handler, SIGINT) == -1) ERR("Setting SIGINT");
+    if (set_handler(sigquit_handler, SIGQUIT) == -1) ERR("Setting SIGQUIT");
     
-    // Rejestracja sygnałów dla Rodzica przy pomocy sigaction (bardziej profesjonalne niż signal)
-    struct sigaction act_int = {0}, act_quit = {0};
-    act_int.sa_handler = sigint_handler; sigaction(SIGINT, &act_int, NULL);
-    act_quit.sa_handler = sigquit_handler; sigaction(SIGQUIT, &act_quit, NULL);
-
     // Rodzic nie czyta z żadnej rury nienazwanej, więc zamyka rury[i][0]
     for (int i = 0; i < n; i++) { 
         close(rury[i][0]); 
-        // UWAGA: rury[i][1] (zapis) zostają otwarte! Rodzic musi mieć jak "wstrzyknąć" startowego ziemniaka.
+        //rury[i][1] (zapis) zostają otwarte! Rodzic musi mieć jak "wstrzyknąć" startowego ziemniaka.
     }
     
     // Otwarcie FIFO raportowego do odczytu w trybie nieblokującym
