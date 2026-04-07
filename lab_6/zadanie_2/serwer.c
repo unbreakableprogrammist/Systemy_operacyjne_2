@@ -34,6 +34,7 @@ int main(int argc,char ** argv){
     if(n<=0 || n>=30) usage(n);
 
     pid_t my_pid = getpid();
+    srand(my_pid); 
     printf("MY PID IS : %d\n",my_pid);
 
     char file_name[40];
@@ -58,8 +59,12 @@ int main(int argc,char ** argv){
     if(pthread_mutex_init(mutex,&mutex_attr) != 0) ERR("mutex init");
     if(pthread_mutexattr_destroy(&mutex_attr) != 0) ERR("mutex attr destroy"); // atrybuty juz niepotrzebne
 
-    // teraz przetwarzanie sygnalu 
-
+    *N_shared = n;
+    for(int i=0;i<n;i++){
+        for(int j=0;j<n;j++){
+            board_shared[i*n+j] = 1 + rand() % 9; // losujemy liczby od 1 do 9
+        }
+    }
 
     struct sigaction sa;
     memset(&sa,0,sizeof(sa));
@@ -67,8 +72,25 @@ int main(int argc,char ** argv){
     if(sigaction(SIGINT,&sa,NULL) == -1) ERR("sigaction");
 
     while(running){
-        
+        int error;
+        if(error = pthread_mutex_lock(mutex) != 0){
+            if(error == EOWNERDEAD) pthread_mutex_consistent(mutex);
+            else ERR("mutex lock");
+        }
+        for(int i=0;i<n;i++){
+            for(int j=0;i<n;j++){
+                printf("%d",board_shared[i*n+j]);
+            }
+            printf("\n");
+        }
+        pthread_mutex_unlock(mutex);
+        struct timespec t = {3,0};
+        while(nanosleep(&t,NULL) > 0){}
     }
-    
+    pthread_mutex_destroy(mutex);
+    munmap(shm_ptr,1024);
+    shm_unlink(file_name);
+
+    return EXIT_SUCCESS;
 
 }
