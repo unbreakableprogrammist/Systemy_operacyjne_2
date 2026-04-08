@@ -14,4 +14,4 @@ ${NAME}: ${NAME}.c
 	$(CC) $(CFLAGS) -o ${NAME} ${NAME}.c
 
 clean:
-	rm -f ${NAME}
+	rm -f ${NAME} shop

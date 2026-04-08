@@ -71,6 +71,10 @@ void print_array(int* array, int n)
     printf("\n");
 }
 
+void children_work(int id,int* shelves,int n){
+    
+}
+
 int main(int argc, char** argv) {     
     if(argc != 3) usage(argv[0]);
     int n = atoi(argv[1]);
@@ -92,4 +96,12 @@ int main(int argc, char** argv) {
     shuffle(shm_ptr, n);
     print_array(shm_ptr, n);
 
+    for(int i = 0;i<m;i++){
+        pid_t pid = fork();
+        if(pid == -1) ERR("fork)");
+        if(pid == 0){
+            childrend_work(i,shm_ptr,n);
+            exit(EXIT_SUCCESS);
+        }
+    }
 }
