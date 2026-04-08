@@ -72,7 +72,7 @@ void print_array(int* array, int n)
 }
 
 void children_work(int id,int* shelves,int n){
-
+    
 }
 
 int main(int argc, char** argv) {     
@@ -100,7 +100,7 @@ int main(int argc, char** argv) {
         if(pthread_mutex_init(&mutex_ptr[i],&mutex_attr)) ERR("pthread mutex init ");
     }
     pthread_mutexattr_destroy(&mutex_attr);
-    
+
 
     for(int i = 0; i < n; ++i) {
         shm_ptr[i] = i+1;
