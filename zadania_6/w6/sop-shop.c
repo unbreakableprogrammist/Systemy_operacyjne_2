@@ -71,8 +71,35 @@ void print_array(int* array, int n)
     printf("\n");
 }
 
-void children_work(int id,int* shelves,int n){
-    
+void children_work(int id,int* shelves,pthread_mutex_t* mutexes,int n){
+    printf("%d worker starts shift\n",getpid());
+    srand(time(NULL) ^ (getpid()));
+    for(int i=0;i<10;i++){
+        int shelf1 = rand() % n;
+        int shelf2;
+        do{
+            shelf2 = rand() % n;
+        }while(shelf1 == shelf2);
+
+        int low = shelf1 < shelf2 ? shelf1 : shelf2; // mniejszy indeks
+        int high = shelf1 > shelf2 ? shelf1 : shelf2;
+        
+        int error1 = pthread_mutex_lock(&mutexes[low]);
+        if(error1 == EOWNERDEAD) pthread_mutex_consistent(&mutexes[low]);
+        else if(error1 != 0) ERR("pthread_mutex_lock");
+        int error2 = pthread_mutex_lock(&mutexes[high]); 
+        if(error2 == EOWNERDEAD) pthread_mutex_consistent(&mutexes[high]);
+        else if(error2 != 0) ERR("pthread_mutex_lock");
+
+        if(shelves[low] > shelves[high]){
+            int pom = shelves[low];
+            shelves[low] = shelves[high];
+            shelves[high] = pom;
+        }
+        pthread_mutex_unlock(&mutexes[high]);
+        pthread_mutex_unlock(&mutexes[low]);
+   
+    }
 }
 
 int main(int argc, char** argv) {     
@@ -92,10 +119,10 @@ int main(int argc, char** argv) {
 
     pthread_mutex_t* mutex_ptr = (pthread_mutex_t*)mmap(NULL,n*sizeof(pthread_mutex_t),PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     if(mutex_ptr == MAP_FAILED) ERR("mmap");
-    pthread_attr_t mutex_attr;
-    if(pthread_attr_init(&mutex_attr)) ERR("pthread_attr_init");
-    if(pthread_mutexattr_setpshared(&mutex_attr,PTHREAD_PROCESS_SHARED)) ERR("pthread setpshared");
-    if(pthread_mutexattr_setrobust(&mutex_attr,PTHREAD_MUTEX_ROBUST)) ERR("pthread attr robust");
+    pthread_mutexattr_t mutex_attr;
+    if(pthread_mutexattr_init(&mutex_attr)) ERR("pthread_mutexattr_init");
+    if(pthread_mutexattr_setpshared(&mutex_attr,PTHREAD_PROCESS_SHARED)) ERR("pthread_mutexattr_setpshared");
+    if(pthread_mutexattr_setrobust(&mutex_attr,PTHREAD_MUTEX_ROBUST)) ERR("pthread_mutexattr_setrobust");
     for(int i=0;i<n;i++){
         if(pthread_mutex_init(&mutex_ptr[i],&mutex_attr)) ERR("pthread mutex init ");
     }
@@ -112,7 +139,7 @@ int main(int argc, char** argv) {
         pid_t pid = fork();
         if(pid == -1) ERR("fork)");
         if(pid == 0){
-            childrend_work(i,shm_ptr,n);
+            children_work(i,shm_ptr,mutex_ptr,n);
             exit(EXIT_SUCCESS);
         }
     }
