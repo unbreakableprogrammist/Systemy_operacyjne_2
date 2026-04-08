@@ -72,7 +72,7 @@ void print_array(int* array, int n)
 }
 
 void children_work(int id,int* shelves,int n){
-    
+
 }
 
 int main(int argc, char** argv) {     
@@ -89,6 +89,18 @@ int main(int argc, char** argv) {
 
     int* shm_ptr = (int*)mmap(NULL,n*sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if(shm_ptr == MAP_FAILED) ERR("mmap");
+
+    pthread_mutex_t* mutex_ptr = (pthread_mutex_t*)mmap(NULL,n*sizeof(pthread_mutex_t),PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    if(mutex_ptr == MAP_FAILED) ERR("mmap");
+    pthread_attr_t mutex_attr;
+    if(pthread_attr_init(&mutex_attr)) ERR("pthread_attr_init");
+    if(pthread_mutexattr_setpshared(&mutex_attr,PTHREAD_PROCESS_SHARED)) ERR("pthread setpshared");
+    if(pthread_mutexattr_setrobust(&mutex_attr,PTHREAD_MUTEX_ROBUST)) ERR("pthread attr robust");
+    for(int i=0;i<n;i++){
+        if(pthread_mutex_init(&mutex_ptr[i],&mutex_attr)) ERR("pthread mutex init ");
+    }
+    pthread_mutexattr_destroy(&mutex_attr);
+    
 
     for(int i = 0; i < n; ++i) {
         shm_ptr[i] = i+1;
