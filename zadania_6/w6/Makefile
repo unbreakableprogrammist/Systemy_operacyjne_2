@@ -1,7 +1,7 @@
-override CFLAGS=-std=c23 -Wall -Wextra -Wshadow -Wvla -Wno-unused-parameter -Wno-unused-const-variable -g -O0 -fsanitize=address,undefined,leak
+override CFLAGS=-std=c2x -Wall -Wextra -Wshadow -Wvla -Wno-unused-parameter -Wno-unused-const-variable -g -O0 -fsanitize=address,undefined,leak
 
 ifdef CI
-override CFLAGS=-std=c23 -Wall -Wextra -Wshadow -Wvla -Werror -Wno-unused-parameter -Wno-unused-const-variable
+override CFLAGS=-std=c2x -Wall -Wextra -Wshadow -Wvla -Werror -Wno-unused-parameter -Wno-unused-const-variable
 endif
 
 NAME=sop-shop

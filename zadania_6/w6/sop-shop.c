@@ -71,4 +71,25 @@ void print_array(int* array, int n)
     printf("\n");
 }
 
-int main(int argc, char** argv) { usage(argv[0]); }
+int main(int argc, char** argv) {     
+    if(argc != 3) usage(argv[0]);
+    int n = atoi(argv[1]);
+    int m = atoi(argv[2]);
+    if(n < 8 || n > 256) usage(argv[0]);
+    if(m < 1 || m > 64) usage(argv[0]);
+
+    // create file 
+    int fd = open(SHOP_FILENAME, O_RDWR | O_CREAT | O_TRUNC, 0600);
+    if(fd == -1) ERR("open");
+    if(ftruncate(fd,n*sizeof(int)) == -1) ERR("ftruncate");
+
+    int* shm_ptr = (int*)mmap(NULL,n*sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if(shm_ptr == MAP_FAILED) ERR("mmap");
+
+    for(int i = 0; i < n; ++i) {
+        shm_ptr[i] = i+1;
+    }
+    shuffle(shm_ptr, n);
+    print_array(shm_ptr, n);
+
+}
