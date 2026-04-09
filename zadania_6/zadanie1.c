@@ -1,0 +1,51 @@
+#define _POSIX_C_SOURCE 200809L
+
+#include <errno.h>
+#include <fcntl.h>
+#include <pthread.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/mman.h>
+#include <sys/wait.h>
+#include <time.h>
+#include <unistd.h>
+
+#define ERR(source)                                     \
+    do                                                  \
+    {                                                   \
+        fprintf(stderr, "%s:%d\n", __FILE__, __LINE__); \
+        perror(source);                                 \
+        kill(0, SIGKILL);                               \
+        exit(EXIT_FAILURE);                             \
+    } while (0)
+
+void usage(char* program_name)
+{
+    fprintf(stderr, "Usage: \n");
+    fprintf(stderr, "\t%s n m\n", program_name);
+    fprintf(stderr, "\t  n - number of items (shelves)\n");
+    fprintf(stderr, "\t  m - number of workers\n");
+    exit(EXIT_FAILURE);
+}
+
+int main(int argc,char** argv){
+    if(argc!=2){
+        usage(argv[0]);
+    }
+    char* name = argv[1];
+    int fd = open(name,O_RDWR);
+    if(fd == -1) ERR("open");
+    struct stat file_stat;
+    if(fstat(fd,&file_stat) == -1) ERR("fstat");
+    int n = file_stat.st_size;
+    char* sh_file = (char*)mmap(NULL,n,PROT_READ | PROT_WRITE,MAP_SHARED,fd,0);
+    if(sh_file == MAP_FAILED) ERR("mmap");
+    for(int i=0;i<n;i++){
+        printf("%c",sh_file[i]);
+    }
+
+    // sprzatanie 
+    if(munmap(sh_file,n) == -1) ERR("munmap");
+    if(close(fd) == -1) ERR("close");
+}
