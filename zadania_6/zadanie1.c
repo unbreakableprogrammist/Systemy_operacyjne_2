@@ -35,18 +35,13 @@ void zlicz(int ile,char* sh_file,int* count){
     }
 }
 
+void children_work()
 int main(int argc,char** argv){
-    if(argc!=2){
+    if(argc!=3){
         usage(argv[0]);
     }
-    char* name = argv[1];
-    int fd = open(name,O_RDWR);
-    if(fd == -1) ERR("open");
-    struct stat file_stat;
-    if(fstat(fd,&file_stat) == -1) ERR("fstat");
-    int n = file_stat.st_size;
-    char* sh_file = (char*)mmap(NULL,n,PROT_READ | PROT_WRITE,MAP_SHARED,fd,0);
-    if(sh_file == MAP_FAILED) ERR("mmap");
+    int m = atoi(argv[2]);
+    
     for(int i=0;i<n;i++){
         printf("%c",sh_file[i]);
     }
