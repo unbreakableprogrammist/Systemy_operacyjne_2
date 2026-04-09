@@ -28,6 +28,12 @@ void usage(char* program_name)
     fprintf(stderr, "\t  m - number of workers\n");
     exit(EXIT_FAILURE);
 }
+void zlicz(int ile,char* sh_file,int* count){
+    for(int i=0;i<ile;i++){
+        unsigned char c = sh_file[i];
+        count[c]++;
+    }
+}
 
 int main(int argc,char** argv){
     if(argc!=2){
@@ -44,7 +50,13 @@ int main(int argc,char** argv){
     for(int i=0;i<n;i++){
         printf("%c",sh_file[i]);
     }
-
+    int count[300] = {0};
+    zlicz(n,sh_file,count);
+    for(int i=0;i<300;i++){
+        if(count[i]>0){
+            printf("Znak %c występuje %d razy\n",i,count[i]);
+        }
+    }
     // sprzatanie 
     if(munmap(sh_file,n) == -1) ERR("munmap");
     if(close(fd) == -1) ERR("close");
