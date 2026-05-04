@@ -1,0 +1,15 @@
+CODEDIRS := shm/code sync/code sync2/code deadlocks/code sockets/code
+
+.PHONY: all clean $(CODEDIRS)
+
+all: $(CODEDIRS)
+
+$(CODEDIRS):
+	$(MAKE) -C $@
+
+clean:
+	@for dir in $(CODEDIRS); do \
+		if [ -f "$$dir/Makefile" ]; then \
+			$(MAKE) -C $$dir clean; \
+		fi \
+	done
