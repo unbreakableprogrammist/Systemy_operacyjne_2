@@ -35,7 +35,7 @@ void zlicz(int ile,char* sh_file,int* count){
     }
 }
 
-void children_work()
+
 int main(int argc,char** argv){
     if(argc!=3){
         usage(argv[0]);

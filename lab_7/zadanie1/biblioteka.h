@@ -27,10 +27,7 @@
 
 #define ERR(source) (perror(source), fprintf(stderr, "%s:%d\n", __FILE__, __LINE__), exit(EXIT_FAILURE))
 
-void usage(char *name) {
-    fprintf(stderr, "USAGE: %s socket port\n", name); 
-    exit(EXIT_FAILURE);
-}
+
 
 int sethandler(void (*f)(int), int sigNo)
 {
@@ -106,3 +103,83 @@ int bind_local_socket(char *name, int backlog_size)
     // Zwróć w pełni gotowe gniazdo serwera
     return socketfd;
 }
+
+int add_new_client(int sfd)
+{
+    int nfd;
+    
+    // Próba wyciągnięcia klienta z kolejki gniazda nasłuchującego
+    if ((nfd = TEMP_FAILURE_RETRY(accept(sfd, NULL, NULL))) < 0)
+    {
+        // Obsługa fałszywego alarmu (tryb nieblokujący)
+        if (EAGAIN == errno || EWOULDBLOCK == errno)
+            return -1;
+            
+        // Twardy błąd systemu
+        ERR("accept");
+    }
+    
+    // Sukces - zwracamy nowe gniazdo do komunikacji
+    return nfd;
+}
+ssize_t bulk_read(int fd, char *buf, size_t count)
+{
+    int c;
+    size_t len = 0;
+    do
+    {
+        c = TEMP_FAILURE_RETRY(read(fd, buf, count));
+        if (c < 0)
+            return c;
+        if (0 == c)
+            return len;
+        buf += c;
+        len += c;
+        count -= c;
+    } while (count > 0);
+    return len;
+}
+
+ssize_t bulk_write(int fd, char *buf, size_t count)
+{
+    int c;
+    size_t len = 0;
+    do
+    {
+        c = TEMP_FAILURE_RETRY(write(fd, buf, count));
+        if (c < 0)
+            return c;
+        buf += c;
+        len += c;
+        count -= c;
+    } while (count > 0);
+    return len;
+}
+
+struct sockaddr_in make_address(char *address,char* port){
+    int ret;
+    struct sockaddr_in addr;
+    struct addrinfo *result;
+    struct addrinfo hints = {};
+    hints.ai_family = AF_INET;
+    if(ret = getaddrinfo(address, port, &hints, &result)){
+        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(ret));
+        exit(EXIT_FAILURE);
+    }
+    addr = *(struct sockaddr_in *)result->ai_addr;
+    freeaddrinfo(result);
+    return addr;
+}
+
+int connect_tcp_socket(char* name,char* port){
+    struct sockaddr_in addr;
+    int socketfd;
+    socketfd = make_tcp_socket();
+    addr = make_address(name, port);
+    if (connect(socketfd, (struct sockaddr *)&addr, sizeof(struct sockaddr_in)) < 0)
+    {
+        ERR("connect");
+    }
+    return socketfd;
+}
+
