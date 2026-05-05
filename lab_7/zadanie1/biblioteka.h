@@ -28,7 +28,6 @@
 #define ERR(source) (perror(source), fprintf(stderr, "%s:%d\n", __FILE__, __LINE__), exit(EXIT_FAILURE))
 
 
-
 int sethandler(void (*f)(int), int sigNo)
 {
     struct sigaction act;
@@ -39,7 +38,7 @@ int sethandler(void (*f)(int), int sigNo)
     return 0;
 }
 
-int make_tcp_socet()
+int make_tcp_socket() 
 {
     int sock;
     sock = socket(PF_INET, SOCK_STREAM, 0); // tworzy gniazdo TCP dla IPv4
@@ -48,10 +47,12 @@ int make_tcp_socet()
     return sock;         // zwraca deskryptor gniazda
 }
 
+// Funkcja: Robi gniazdo TCP które słucha na danym porcie (serwer)
+// Słownie: Tworzymy pusty port serwera, ustawiamy na nim nasłuchiwanie
 int bind_tcp_socket(int port, int backlog_size)
 {
     struct sockaddr_in addr;             // struktura z adresem IPv4 i portem
-    int socketfd = make_tcp_socet();     // tworzy gniazdo TCP
+    int socketfd = make_tcp_socket();    // POPRAWKA: Używamy nowej poprawnej nazwy
     memset(&addr, 0, sizeof(addr));      // czyści strukturę adresu
     addr.sin_family = AF_INET;           // ustawia rodzinę adresów na IPv4
     addr.sin_port = htons(port);         // zamienia port na kolejność bajtów sieciowych
@@ -65,6 +66,8 @@ int bind_tcp_socket(int port, int backlog_size)
     return socketfd; // zwraca gotowe gniazdo serwera
 }
 
+// Funkcja: Robi lokalne gniazdo UNIX (takie jak plik ale dla komunikacji międzyprocesowej)
+// Słownie: Tworzymy taki "pseudo-plik" do komunikacji
 int make_local_socket(char *name, struct sockaddr_un *adr)
 {
     int sock;
@@ -77,6 +80,8 @@ int make_local_socket(char *name, struct sockaddr_un *adr)
     strncpy(adr->sun_path, name, sizeof(adr->sun_path) - 1); // wpisuje ścieżkę socketu
 
     return sock; // zwraca deskryptor gniazda
+// Funkcja: Tworzy plik gniazda UNIX i ustawia na nim nasłuchiwanie
+// Słownie: Robi plik (name) poprzez który procesy mogą się komunikować
 }
 
 int bind_local_socket(char *name, int backlog_size)
@@ -102,6 +107,8 @@ int bind_local_socket(char *name, int backlog_size)
         
     // Zwróć w pełni gotowe gniazdo serwera
     return socketfd;
+// Funkcja: Akceptuje nowego klienta z kolejki oczekujących (jeśli jakiś czeka)
+// Słownie: Wyciąga klienta z kolejki lub mówi że nie ma żadnego (w trybie nonblocking)
 }
 
 int add_new_client(int sfd)
@@ -121,7 +128,11 @@ int add_new_client(int sfd)
     
     // Sukces - zwracamy nowe gniazdo do komunikacji
     return nfd;
+// Funkcja: Czyta DOKŁADNIE count bajtów (albo mniej jeśli koniec pliku)
+// Słownie: read() może czytać mniej niż chcemy, ta funkcja powtarza czytanie aż się napełni
+// lub skończy się plik
 }
+
 ssize_t bulk_read(int fd, char *buf, size_t count)
 {
     int c;
@@ -135,6 +146,8 @@ ssize_t bulk_read(int fd, char *buf, size_t count)
             return len;
         buf += c;
         len += c;
+// Funkcja: Pisze DOKŁADNIE count bajtów lub wszystko się nie uda
+// Słownie: write() może napisać mniej niż chcemy, ta funkcja powtarza pisanie aż wszystko pójdzie
         count -= c;
     } while (count > 0);
     return len;
@@ -156,22 +169,27 @@ ssize_t bulk_write(int fd, char *buf, size_t count)
     return len;
 }
 
-struct sockaddr_in make_address(char *address,char* port){
+// Funkcja: Konwertuje tekst adresu IP i portu na strukturę systemową
+// Słownie: Bierze "192.168.1.1" i "8080" i przetwarza na coś co system rozumie
+// Obsługuje DNS lookup jeśli podamy nazwę zamiast IP
+struct sockaddr_in make_address(char *address, char* port) {
     int ret;
     struct sockaddr_in addr;
     struct addrinfo *result;
     struct addrinfo hints = {};
     hints.ai_family = AF_INET;
-    if(ret = getaddrinfo(address, port, &hints, &result)){
+    
+    if ((ret = getaddrinfo(address, port, &hints, &result))) {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(ret));
         exit(EXIT_FAILURE);
     }
-    addr = *(struct sockaddr_in *)result->ai_addr;
+    
+    addr = *(struct sockaddr_in *)(result->ai_addr);
     freeaddrinfo(result);
     return addr;
 }
 
-int connect_tcp_socket(char* name,char* port){
+int connect_tcp_socket(char* name, char* port) {
     struct sockaddr_in addr;
     int socketfd;
     socketfd = make_tcp_socket();
@@ -182,4 +200,3 @@ int connect_tcp_socket(char* name,char* port){
     }
     return socketfd;
 }
-
