@@ -174,17 +174,17 @@ ssize_t bulk_write(int fd, char *buf, size_t count)
 // Obsługuje DNS lookup jeśli podamy nazwę zamiast IP
 struct sockaddr_in make_address(char *address, char* port) {
     int ret;
-    struct sockaddr_in addr;
-    struct addrinfo *result;
-    struct addrinfo hints = {};
-    hints.ai_family = AF_INET;
+    struct sockaddr_in addr; // struktura do zwrocenia (trzyma IP i port w sposob zrozumiały dla systemu)
+    struct addrinfo *result;  // struktura pomocnicza do przechowania wyniku getaddrinfo
+    struct addrinfo hints = {}; // struktura do określenia kryteriów wyszukiwania (zero-inicjalizacja)
+    hints.ai_family = AF_INET; // szukamy tylko adresów IPv4
     
-    if ((ret = getaddrinfo(address, port, &hints, &result))) {
+    if ((ret = getaddrinfo(address, port, &hints, &result))) { // do result zapisujemy wynik getaddrinfo, i poprzez hints określamy że chcemy tylko IPv4
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(ret));
         exit(EXIT_FAILURE);
     }
     
-    addr = *(struct sockaddr_in *)(result->ai_addr);
+    addr = *(struct sockaddr_in *)(result->ai_addr); // kpoiujemy do addr znaleziony adres ip i port z result
     freeaddrinfo(result);
     return addr;
 }
@@ -192,10 +192,24 @@ struct sockaddr_in make_address(char *address, char* port) {
 int connect_tcp_socket(char* name, char* port) {
     struct sockaddr_in addr;
     int socketfd;
-    socketfd = make_tcp_socket();
-    addr = make_address(name, port);
+    socketfd = make_tcp_socket(); // najpierw tworzymy gniazdo TCP (u klienta)
+    addr = make_address(name, port); // addr to taka strukturka do ktorej zapisujemy do czego podlaczamy 
     if (connect(socketfd, (struct sockaddr *)&addr, sizeof(struct sockaddr_in)) < 0)
     {
+        ERR("connect");
+    }
+    return socketfd;
+}
+int connect_local_socket(char *name) {
+    struct sockaddr_un addr;
+    int socketfd;
+
+    // Tworzymy gniazdo w domenie lokalnej (UNIX), a nie internetowej
+    socketfd = make_local_socket(name, &addr);
+
+    // Dzwonimy używając adresu wygenerowanego przez make_local_socket
+    // Używamy SUN_LEN do dokładnego określenia rozmiaru ścieżki
+    if (connect(socketfd, (struct sockaddr *)&addr, SUN_LEN(&addr)) < 0) {
         ERR("connect");
     }
     return socketfd;
