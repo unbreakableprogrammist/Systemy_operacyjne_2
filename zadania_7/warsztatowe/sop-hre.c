@@ -15,6 +15,7 @@
 #include <unistd.h>
 
 #define BACKLOG 4
+#define MAX_EVENTS 10
 #define ERR(source) (perror(source), fprintf(stderr, "%s:%d\n", __FILE__, __LINE__), exit(EXIT_FAILURE))
 
 void usage(char* name)
@@ -52,8 +53,69 @@ int bind_tcp_port(int port) {
     return socketfd;
 }
 
+int add_new_client(int socketfd){ // akceptujemy nowego klienta, socketfd to gniazdo nasłuchujące
+    int clientfd;
+    if ((clientfd = TEMP_FAILURE_RETRY(accept(socketfd, NULL, NULL))) < 0) {// akceptujemy klienta
+        if(errno == EAGAIN || errno == EWOULDBLOCK) return -1; // w trybie nonblocking, jeśli nie ma klienta, zwracamy -1
+        ERR("accept"); // w przypadku innego błędu, wypisujemy błą
+    }
+    return clientfd; // zwracamy deskryptor do klienta
+
+}
+ssize_t bulk_read(int fd, char *buf, size_t count)
+{
+    int c;
+    size_t len = 0;
+    do
+    {
+        c = TEMP_FAILURE_RETRY(read(fd, buf, count));
+        if (c < 0)
+            if(errno == EAGAIN || errno == EWOULDBLOCK) return -1;
+            else ERR("read");
+        if (0 == c)
+            return len;
+        buf += c;
+        len += c;
+        count -= c;
+    } while (count > 0);
+    return len;
+}
+
+
 int main(int argc,char** argv) {
     if (argc != 2) usage(argv[0]);
     int port = atoi(argv[1]);
+    int tcp_ssocket = bind_tcp_port(port); // tworzymy gniazdo nasłuchujące na porcie
+    int flag = fcntl(tcp_ssocket, F_GETFL) | O_NONBLOCK; // ustawiamy gniazdo w tryb non-blocking
+    if (fcntl(tcp_ssocket, F_SETFL, flag) < 0) ERR("fcntl");
+    if (sethandler(SIG_IGN, SIGPIPE)) ERR("sethandler"); // ignorujemy SIGPIPE, który jest wysyłany, gdy piszemy do zamknietego gniazda
+    
+    int epoll_fd = epoll_create1(0); // tworzymy epoll
+    if (epoll_fd < 0) ERR("epoll_create1");
+    struct epoll_event event;
+    struct epoll_event events[MAX_EVENTS]; // tablica do przechowywania zdarzeń, które epoll zwróci
+    event.events = EPOLLIN; // interesują nas zdarzenia odczytu
+    event.data.fd = tcp_ssocket; // ustawiamy dane zdarzenia na deskryptor gniazda nasłuchującego
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, tcp_ssocket, &event) < 0) ERR("epoll_ctl"); // dodajemy gniaz
+    int how_much_events;
+    ssize_t size;
+    while (1)
+    {
+        how_much_events = epoll_wait(epoll_fd, events, MAX_EVENTS, -1); // czekamy na zdarzenia
+        if(how_much_events < 0) ERR("epoll_wait");
+        for (int i = 0; i < how_much_events; i++){
+            char data[20]; // bufor do przechowywania danych od klienta
+            int new_client_fd = add_new_client(events[i].data.fd); // akceptujemy nowego klienta
+            size = bulk_read(new_client_fd,data,sizeof(data)); // próbujemy odczytać dane od klienta
+            if(size < 0){
+                if(errno == EAGAIN || errno == EWOULDBLOCK) continue; // jeśli nie ma danych do odczytania, przechodzimy do następnego zdarzenia
+                else ERR("read"); // w przypadku innego błędu, wypisujemy błąd
+            }
+            printf("wiadomosc od klienta: %s\n", data); // wypisujemy wiadomość od klienta
+            if (close(new_client_fd) < 0) ERR("close"); // zamykamy gniazdo klienta
+        }
+        
+    }
+    
     return 0;
 }
