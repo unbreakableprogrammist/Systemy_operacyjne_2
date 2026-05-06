@@ -101,21 +101,74 @@ int main(int argc,char** argv) {
     ssize_t size;
     while (1)
     {
-        how_much_events = epoll_wait(epoll_fd, events, MAX_EVENTS, -1); // czekamy na zdarzenia
+        // czekamy na zdarzenia (od naszego portiera epoll), -1 oznacza czekanie w nieskończoność
+        how_much_events = TEMP_FAILURE_RETRY(epoll_wait(epoll_fd, events, MAX_EVENTS, -1)); 
         if(how_much_events < 0) ERR("epoll_wait");
+
         for (int i = 0; i < how_much_events; i++){
-            char data[20]; // bufor do przechowywania danych od klienta
-            int new_client_fd = add_new_client(events[i].data.fd); // akceptujemy nowego klienta
-            size = bulk_read(new_client_fd,data,sizeof(data)); // próbujemy odczytać dane od klienta
-            if(size < 0){
-                if(errno == EAGAIN || errno == EWOULDBLOCK) continue; // jeśli nie ma danych do odczytania, przechodzimy do następnego zdarzenia
-                else ERR("read"); // w przypadku innego błędu, wypisujemy błąd
+            
+            // ============================================================================
+            // SYTUACJA 1: Zdarzenie na głównym gnieździe nasłuchującym (NOWY KLIENT DZWONI)
+            // ============================================================================
+            if(events[i].data.fd == tcp_ssocket){
+                
+                // akceptujemy nowego klienta
+                int new_client_fd = add_new_client(tcp_ssocket); 
+                
+                if (new_client_fd >= 0) {
+                    printf("Nowy klient podlaczony! (fd: %d)\n", new_client_fd);
+                    
+                    // ustawiamy gniazdo nowego klienta w tryb non-blocking (bardzo ważne!)
+                    int c_flag = fcntl(new_client_fd, F_GETFL) | O_NONBLOCK; 
+                    if (fcntl(new_client_fd, F_SETFL, c_flag) < 0) ERR("fcntl");
+
+                    // dodajemy tego nowego klienta do naszego epolla, żeby mógł go obserwować
+                    struct epoll_event client_event;
+                    client_event.events = EPOLLIN; // interesują nas zdarzenia odczytu
+                    client_event.data.fd = new_client_fd; // przypisujemy mu jego własny deskryptor
+                    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, new_client_fd, &client_event) < 0) ERR("epoll_ctl");
+
+                    // wysyłamy powitanie zgodnie z wymogiem zadania
+                    char *welcome = "Welcome, elector!\n";
+                    write(new_client_fd, welcome, strlen(welcome));
+                }
             }
-            printf("wiadomosc od klienta: %s\n", data); // wypisujemy wiadomość od klienta
-            if (close(new_client_fd) < 0) ERR("close"); // zamykamy gniazdo klienta
-        }
-        
-    }
+            // ============================================================================
+            // SYTUACJA 2: Zdarzenie na gnieździe klienta (STARY KLIENT WŁAŚNIE COŚ NAPISAŁ)
+            // ============================================================================
+            else {
+                
+                // jeśli to nie jest gniazdo nasłuchujące, to jest to gniazdo klienta
+                int client_fd = events[i].data.fd; 
+                char data[256]; // bufor do przechowywania danych od klienta (ciut większy na tekst)
+                memset(data, 0, sizeof(data)); // czyścimy bufor, żeby nie było w nim śmieci z pamięci
+
+                // próbujemy odczytać dane od klienta (używamy zwykłego read, bo czytamy tekst z netcata, a nie paczkę bajtów!)
+                size = read(client_fd, data, sizeof(data) - 1); 
+                
+                if(size > 0){
+                    // wypisujemy wiadomość od klienta
+                    printf("wiadomosc od klienta (fd %d): %s", client_fd, data); 
+                } 
+                else if (size == 0) {
+                    // jeśli read zwraca 0, oznacza to ZAWSZE, że klient rozłączył się z netcata
+                    printf("klient (fd %d) sie rozlaczyl.\n", client_fd);
+                    
+                    // usuwamy go z obserwowanych przez epoll
+                    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, NULL); 
+                    
+                    // zamykamy gniazdo klienta
+                    if (close(client_fd) < 0) ERR("close"); 
+                }
+                else if(size < 0){
+                    // jeśli nie ma danych do odczytania, przechodzimy do następnego zdarzenia
+                    if(errno == EAGAIN || errno == EWOULDBLOCK) continue; 
+                    // w przypadku innego błędu, wypisujemy błąd
+                    else ERR("read"); 
+                }
+            }
+        } // koniec pętli for
+    } // koniec pętli while
     
     return 0;
 }
