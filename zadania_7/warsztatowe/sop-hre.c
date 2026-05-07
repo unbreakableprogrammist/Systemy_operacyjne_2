@@ -92,27 +92,27 @@ int main(int argc,char** argv) {
     // usage
     if (argc != 2) usage(argv[0]);
     int port = atoi(argv[1]);
-    int tcp_ssocket = bind_tcp_port(port);
-    int flag = fcntl(tcp_ssocket, F_GETFL) | O_NONBLOCK;
+    int tcp_ssocket = bind_tcp_port(port); // bindujemy nasz socket do portu i dostajemy deskryptor do gniazda nasłuchującego
+    int flag = fcntl(tcp_ssocket, F_GETFL) | O_NONBLOCK; // ustawiamy gniazdo nasłuchujące w tryb non-blocking
     if (fcntl(tcp_ssocket, F_SETFL, flag) < 0) ERR("fcntl");
-    if (sethandler(SIG_IGN, SIGPIPE)) ERR("sethandler");
+    if (sethandler(SIG_IGN, SIGPIPE)) ERR("sethandler"); // ingorujemy SIGPIPE, który może wystąpić, gdy próbujemy pisać do rozłączonego klienta
     
-    int epoll_fd = epoll_create1(0);
+    int epoll_fd = epoll_create1(0); // tworzymy epoll, który będzie monitorował zdarzenia na naszych gniazdach
     if (epoll_fd < 0) ERR("epoll_create1");
     struct epoll_event event;
     struct epoll_event events[MAX_EVENTS];
-    event.events = EPOLLIN;
-    event.data.fd = tcp_ssocket;
+    event.events = EPOLLIN; // interesują nas zdarzenia odczytu (gdy klient wysyła dane) oraz nowe połączenia (gdy na gnieździe nasłuchującym pojawi się nowe połączenie)
+    // dodajemy gniazdo nasłuchujące do epoll, aby monitorować nowe połączenia
+    event.data.fd = tcp_ssocket; 
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, tcp_ssocket, &event) < 0) ERR("epoll_ctl");
 
-    // === TABLICE STANÓW SERWERA DO ETAPU 3 ===
     
     // Nazwy państw elektorów (indeksowane 1-7)
     const char *elector_states[] = {"", "Moguncja", "Trewir", "Kolonia", "Czechy", "Palatynat", "Saksonia", "Brandenburgia"};
     // Nazwy kandydatów (indeksowane 1-3)
     const char *candidates[] = {"", "Franciszek I", "Karol V", "Henryk VIII"};
     
-    int client_elector_id[MAX_FDS] = {0}; // Mapuje deskryptor(fd) na ID elektora. 0 oznacza "oczekuje na logowanie"
+    int client_elector_id[MAX_FDS] = {0}; // Mapuje deskryptor(fd) na ID elektora. 0 oznacza "oczekuje na logowanie", liczba oznacza ID elektora (1-7)
     int connected_electors[8] = {0};      // Tracks if elector 1-7 is online (zapisuje fd tego elektora)
     int elector_votes[8] = {0};           // Zapisuje aktualny głos (1-3) elektora (1-7). 0 = brak głosu
 
@@ -121,17 +121,17 @@ int main(int argc,char** argv) {
 
     while (1)
     {
-        how_much_events = TEMP_FAILURE_RETRY(epoll_wait(epoll_fd, events, MAX_EVENTS, -1)); 
+        how_much_events = TEMP_FAILURE_RETRY(epoll_wait(epoll_fd, events, MAX_EVENTS, -1)); // bierzemy z epoll ile eventow
         if(how_much_events < 0) ERR("epoll_wait");
-
         for (int i = 0; i < how_much_events; i++){
             
             // -------------------------------------------------------------------------
             // NOWY KLIENT
             // -------------------------------------------------------------------------
-            if(events[i].data.fd == tcp_ssocket){
-                int new_client_fd = add_new_client(tcp_ssocket); 
-                if (new_client_fd >= 0) {
+            if(events[i].data.fd == tcp_ssocket){ // jesli event.id daje nam gniazdo nasluchujace to znaczy ze nowy kleint chce sie polaczyc
+                int new_client_fd = add_new_client(tcp_ssocket);// akceptujemy nowego klienta
+                if (new_client_fd >= 0) { // accept zwraca -1, gdy nie ma nowych klientów (w trybie non-blocking), więc sprawdzamy, czy jest >= 0
+                    // accept zwrocil nam deskryptor gniazda nowego klienta wiec dodajemy go do epoll i jako non-blocking
                     int c_flag = fcntl(new_client_fd, F_GETFL) | O_NONBLOCK; 
                     if (fcntl(new_client_fd, F_SETFL, c_flag) < 0) ERR("fcntl");
 
@@ -150,13 +150,14 @@ int main(int argc,char** argv) {
             // DANE OD KLIENTA
             // -------------------------------------------------------------------------
             else {
+                // jesli podlaczyl sie klient(bo event.id daje nam gniazdo klienta albo gniazdo nasluchujace ale to sprawdzilismy wczesniej)
                 int client_fd = events[i].data.fd; 
                 char data[256]; 
                 memset(data, 0, sizeof(data));
 
-                size = read(client_fd, data, sizeof(data) - 1); 
+                size = read(client_fd, data, sizeof(data) - 1); // czytamy dane od klienta 
                 
-                if(size > 0){
+                if(size > 0){ // jesli size > 0 to znaczy ze klient cos wyslal  
                     // Czyszczenie znaków \r oraz \n wysyłanych przez netcat
                     for(int j=0; j<size; j++){
                         if(data[j] == '\n' || data[j] == '\r'){
@@ -166,18 +167,15 @@ int main(int argc,char** argv) {
                     }
 
                     // SPRAWDZENIE STANÓW KLIENTA
-                    if (client_elector_id[client_fd] == 0) {
-                        // KLIENT OCZEKUJE NA IDENTYFIKACJĘ (Cyfra 1-7)
-                        if (strlen(data) == 1 && data[0] >= '1' && data[0] <= '7') {
-                            int e_id = data[0] - '0';
-                            
+                    if (client_elector_id[client_fd] == 0) { // jesli fd nie jest przypisany do zadnego elektora to znaczy ze klient nie jest zidentyfikowany
+                        if (strlen(data) == 1 && data[0] >= '1' && data[0] <= '7') { // jesli podal liczbe
+                            int e_id = data[0] - '0'; // zamieniamy na prawidzwa liczbe
                             // Weryfikacja, czy elektor o tym numerze nie jest już podłączony
-                            if (connected_electors[e_id] != 0) {
+                            if (connected_electors[e_id] != 0) { // jesli miejsce jest zajete 
                                 char *msg = "Blad: Elektor o tym numerze jest juz podlaczony.\n";
-                                write(client_fd, msg, strlen(msg));
-                                
-                                epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, NULL); 
-                                close(client_fd);
+                                write(client_fd, msg, strlen(msg)); //piszemy do klienta 
+                                epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, NULL); // usuwamy klienta z epoll, bo nie chcemy juz dostawac od niego zadnych eventow 
+                                close(client_fd); // zamukamy deskrytpor klienta, bo nie chcemy z nim rozmawiac
                             } else {
                                 // Sukces - logowanie elektora
                                 connected_electors[e_id] = client_fd;
@@ -217,7 +215,7 @@ int main(int argc,char** argv) {
                         }
                     }
                 } 
-                else if (size == 0) {
+                else if (size == 0) { // read zwraca 0, gdy klient zamknął połączenie
                     // ROZŁĄCZENIE KLIENTA
                     int e_id = client_elector_id[client_fd];
                     if (e_id > 0) {
@@ -231,9 +229,9 @@ int main(int argc,char** argv) {
                     
                     epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, NULL); 
                     if (close(client_fd) < 0) ERR("close"); 
-                }
+                } // jesli size < 0 to znaczy ze wystapil blad podczas czytania danych od klienta
                 else if(size < 0){
-                    if(errno == EAGAIN || errno == EWOULDBLOCK) continue; 
+                    if(errno == EAGAIN || errno == EWOULDBLOCK) continue; // w trybie non-blocking, jeśli nie ma danych do czytania, po prostu kontynuujemy pętlę 
                     else ERR("read"); 
                 }
             }
