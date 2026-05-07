@@ -16,7 +16,13 @@
 
 #define BACKLOG 4
 #define MAX_EVENTS 10
+#define MAX_FDS 1024
 #define ERR(source) (perror(source), fprintf(stderr, "%s:%d\n", __FILE__, __LINE__), exit(EXIT_FAILURE))
+
+typedef struct {
+    char name[32];
+    int votes;
+} Candidate;
 
 void usage(char* name)
 {
@@ -83,92 +89,156 @@ ssize_t bulk_read(int fd, char *buf, size_t count)
 
 
 int main(int argc,char** argv) {
+    // usage
     if (argc != 2) usage(argv[0]);
     int port = atoi(argv[1]);
-    int tcp_ssocket = bind_tcp_port(port); // tworzymy gniazdo nasłuchujące na porcie
-    int flag = fcntl(tcp_ssocket, F_GETFL) | O_NONBLOCK; // ustawiamy gniazdo w tryb non-blocking
+    int tcp_ssocket = bind_tcp_port(port);
+    int flag = fcntl(tcp_ssocket, F_GETFL) | O_NONBLOCK;
     if (fcntl(tcp_ssocket, F_SETFL, flag) < 0) ERR("fcntl");
-    if (sethandler(SIG_IGN, SIGPIPE)) ERR("sethandler"); // ignorujemy SIGPIPE, który jest wysyłany, gdy piszemy do zamknietego gniazda
+    if (sethandler(SIG_IGN, SIGPIPE)) ERR("sethandler");
     
-    int epoll_fd = epoll_create1(0); // tworzymy epoll
+    int epoll_fd = epoll_create1(0);
     if (epoll_fd < 0) ERR("epoll_create1");
     struct epoll_event event;
-    struct epoll_event events[MAX_EVENTS]; // tablica do przechowywania zdarzeń, które epoll zwróci
-    event.events = EPOLLIN; // interesują nas zdarzenia odczytu
-    event.data.fd = tcp_ssocket; // ustawiamy dane zdarzenia na deskryptor gniazda nasłuchującego
-    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, tcp_ssocket, &event) < 0) ERR("epoll_ctl"); // dodajemy gniaz
+    struct epoll_event events[MAX_EVENTS];
+    event.events = EPOLLIN;
+    event.data.fd = tcp_ssocket;
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, tcp_ssocket, &event) < 0) ERR("epoll_ctl");
+
+    // === TABLICE STANÓW SERWERA DO ETAPU 3 ===
+    
+    // Nazwy państw elektorów (indeksowane 1-7)
+    const char *elector_states[] = {"", "Moguncja", "Trewir", "Kolonia", "Czechy", "Palatynat", "Saksonia", "Brandenburgia"};
+    // Nazwy kandydatów (indeksowane 1-3)
+    const char *candidates[] = {"", "Franciszek I", "Karol V", "Henryk VIII"};
+    
+    int client_elector_id[MAX_FDS] = {0}; // Mapuje deskryptor(fd) na ID elektora. 0 oznacza "oczekuje na logowanie"
+    int connected_electors[8] = {0};      // Tracks if elector 1-7 is online (zapisuje fd tego elektora)
+    int elector_votes[8] = {0};           // Zapisuje aktualny głos (1-3) elektora (1-7). 0 = brak głosu
+
     int how_much_events;
     ssize_t size;
+
     while (1)
     {
-        // czekamy na zdarzenia (od naszego portiera epoll), -1 oznacza czekanie w nieskończoność
         how_much_events = TEMP_FAILURE_RETRY(epoll_wait(epoll_fd, events, MAX_EVENTS, -1)); 
         if(how_much_events < 0) ERR("epoll_wait");
 
         for (int i = 0; i < how_much_events; i++){
             
-            // ============================================================================
-            // SYTUACJA 1: Zdarzenie na głównym gnieździe nasłuchującym (NOWY KLIENT DZWONI)
-            // ============================================================================
+            // -------------------------------------------------------------------------
+            // NOWY KLIENT
+            // -------------------------------------------------------------------------
             if(events[i].data.fd == tcp_ssocket){
-                
-                // akceptujemy nowego klienta
                 int new_client_fd = add_new_client(tcp_ssocket); 
-                
                 if (new_client_fd >= 0) {
-                    printf("Nowy klient podlaczony! (fd: %d)\n", new_client_fd);
-                    
-                    // ustawiamy gniazdo nowego klienta w tryb non-blocking (bardzo ważne!)
                     int c_flag = fcntl(new_client_fd, F_GETFL) | O_NONBLOCK; 
                     if (fcntl(new_client_fd, F_SETFL, c_flag) < 0) ERR("fcntl");
 
-                    // dodajemy tego nowego klienta do naszego epolla, żeby mógł go obserwować
                     struct epoll_event client_event;
-                    client_event.events = EPOLLIN; // interesują nas zdarzenia odczytu
-                    client_event.data.fd = new_client_fd; // przypisujemy mu jego własny deskryptor
+                    client_event.events = EPOLLIN;
+                    client_event.data.fd = new_client_fd;
                     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, new_client_fd, &client_event) < 0) ERR("epoll_ctl");
-
-                    // wysyłamy powitanie zgodnie z wymogiem zadania
-                    char *welcome = "Welcome, elector!\n";
-                    write(new_client_fd, welcome, strlen(welcome));
+                    
+                    // Wymóg: Wiadomość powitalna jest wysyłana dopiero po identyfikacji.
+                    // Zaznaczamy klienta jako niezlokalizowanego (0)
+                    client_elector_id[new_client_fd] = 0; 
+                    printf("Nowy klient podlaczony! (fd: %d). Oczekuje na identyfikacje...\n", new_client_fd);
                 }
             }
-            // ============================================================================
-            // SYTUACJA 2: Zdarzenie na gnieździe klienta (STARY KLIENT WŁAŚNIE COŚ NAPISAŁ)
-            // ============================================================================
+            // -------------------------------------------------------------------------
+            // DANE OD KLIENTA
+            // -------------------------------------------------------------------------
             else {
-                
-                // jeśli to nie jest gniazdo nasłuchujące, to jest to gniazdo klienta
                 int client_fd = events[i].data.fd; 
-                char data[256]; // bufor do przechowywania danych od klienta (ciut większy na tekst)
-                memset(data, 0, sizeof(data)); // czyścimy bufor, żeby nie było w nim śmieci z pamięci
+                char data[256]; 
+                memset(data, 0, sizeof(data));
 
-                // próbujemy odczytać dane od klienta (używamy zwykłego read, bo czytamy tekst z netcata, a nie paczkę bajtów!)
                 size = read(client_fd, data, sizeof(data) - 1); 
                 
                 if(size > 0){
-                    // wypisujemy wiadomość od klienta
-                    printf("wiadomosc od klienta (fd %d): %s", client_fd, data); 
+                    // Czyszczenie znaków \r oraz \n wysyłanych przez netcat
+                    for(int j=0; j<size; j++){
+                        if(data[j] == '\n' || data[j] == '\r'){
+                            data[j] = '\0';
+                            break;
+                        }
+                    }
+
+                    // SPRAWDZENIE STANÓW KLIENTA
+                    if (client_elector_id[client_fd] == 0) {
+                        // KLIENT OCZEKUJE NA IDENTYFIKACJĘ (Cyfra 1-7)
+                        if (strlen(data) == 1 && data[0] >= '1' && data[0] <= '7') {
+                            int e_id = data[0] - '0';
+                            
+                            // Weryfikacja, czy elektor o tym numerze nie jest już podłączony
+                            if (connected_electors[e_id] != 0) {
+                                char *msg = "Blad: Elektor o tym numerze jest juz podlaczony.\n";
+                                write(client_fd, msg, strlen(msg));
+                                
+                                epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, NULL); 
+                                close(client_fd);
+                            } else {
+                                // Sukces - logowanie elektora
+                                connected_electors[e_id] = client_fd;
+                                client_elector_id[client_fd] = e_id;
+                                
+                                char msg[256];
+                                snprintf(msg, sizeof(msg), "Welcome, elector of %s!\n", elector_states[e_id]);
+                                write(client_fd, msg, strlen(msg));
+                                printf("Klient (fd %d) zalogowal sie jako elektor %d (%s).\n", client_fd, e_id, elector_states[e_id]);
+                            }
+                        } else {
+                            // Wymóg: zły znak -> zakończ połączenie
+                            char *msg = "Blad: Nieznany elektor. Rozlaczanie.\n";
+                            write(client_fd, msg, strlen(msg));
+                            
+                            epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, NULL); 
+                            close(client_fd);
+                        }
+                    } 
+                    else {
+                        // KLIENT JEST ZAUTORYZOWANY - OCZEKUJE NA GŁOS (Cyfra 1-3)
+                        if (strlen(data) == 1 && data[0] >= '1' && data[0] <= '3') {
+                            int c_id = data[0] - '0';
+                            int e_id = client_elector_id[client_fd];
+                            
+                            // Głosy mogą się nadpisywać
+                            elector_votes[e_id] = c_id;
+                            
+                            char msg[256];
+                            snprintf(msg, sizeof(msg), "Zapisano glos. Kandydat: %s\n", candidates[c_id]);
+                            write(client_fd, msg, strlen(msg));
+                            printf("Elektor %d zaglosowal na kandydata %d\n", e_id, c_id);
+                        } else {
+                            // Wymóg: Inne znaki są ignorowane
+                            // Możemy wysłać ostrzeżenie do debugowania, choć wymagania nakazują "ignorować"
+                            printf("Zignorowano nieznany znak '%s' od elektora %d\n", data, client_elector_id[client_fd]);
+                        }
+                    }
                 } 
                 else if (size == 0) {
-                    // jeśli read zwraca 0, oznacza to ZAWSZE, że klient rozłączył się z netcata
-                    printf("klient (fd %d) sie rozlaczyl.\n", client_fd);
+                    // ROZŁĄCZENIE KLIENTA
+                    int e_id = client_elector_id[client_fd];
+                    if (e_id > 0) {
+                        // Zwalniamy miejsce, aby elektor mógł podłączyć się ponownie
+                        connected_electors[e_id] = 0; 
+                        client_elector_id[client_fd] = 0;
+                        printf("Elektor %d (fd %d) rozlaczyl sie.\n", e_id, client_fd);
+                    } else {
+                        printf("Niezidentyfikowany klient (fd %d) rozlaczyl sie.\n", client_fd);
+                    }
                     
-                    // usuwamy go z obserwowanych przez epoll
                     epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, NULL); 
-                    
-                    // zamykamy gniazdo klienta
                     if (close(client_fd) < 0) ERR("close"); 
                 }
                 else if(size < 0){
-                    // jeśli nie ma danych do odczytania, przechodzimy do następnego zdarzenia
                     if(errno == EAGAIN || errno == EWOULDBLOCK) continue; 
-                    // w przypadku innego błędu, wypisujemy błąd
                     else ERR("read"); 
                 }
             }
-        } // koniec pętli for
-    } // koniec pętli while
+        } 
+    }
     
     return 0;
 }
