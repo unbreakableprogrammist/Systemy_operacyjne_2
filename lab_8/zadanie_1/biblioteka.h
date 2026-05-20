@@ -13,6 +13,13 @@
 #include <sys/types.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <bits/socket.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+
 
 #ifndef TEMP_FAILURE_RETRY
 #define TEMP_FAILURE_RETRY(expression)             \
