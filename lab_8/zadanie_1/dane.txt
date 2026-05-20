@@ -1,0 +1,11 @@
+Systemy Operacyjne 2 - Laboratorium 8: Protokoły datagramowe i serwery wielowątkowe.
+To jest przykładowy plik tekstowy wygenerowany na potrzeby przetestowania komunikacji UDP pomiędzy klientem a serwerem.
+Ponieważ nasz protokół datagramowy (UDP) ogranicza rozmiar pojedynczej paczki danych do 576 bajtów, a pierwsze 8 bajtów zajmują metadane (32-bitowy numer chunku oraz 32-bitowa flaga końca), czysty tekst w każdym pakiecie może mieć maksymalnie 568 bajtów.
+
+Ten tekst jest celowo odpowiednio długi, aby klient musiał podzielić go na kilka mniejszych fragmentów (tzw. chunków), wysłać je po kolei, a następnie poczekać na potwierdzenie od serwera (ACK). Dzięki temu przetestujesz poprawność działania pętli dzielącej plik oraz mechanizmów zatwierdzania paczek.
+
+UDP (User Datagram Protocol) to bezpołączeniowy protokół warstwy transportowej. W przeciwieństwie do TCP, nie gwarantuje on dostarczenia pakietów ani zachowania ich kolejności. Dlatego w naszym zadaniu zaimplementowaliśmy własny mechanizm retransmisji: klient czeka 0.5 sekundy na potwierdzenie. Jeśli potwierdzenie nie nadejdzie w tym czasie, wysyłka jest ponawiana. Maksymalna liczba prób wynosi 5. 
+
+Serwer z kolei dba o to, aby ignorować duplikaty pakietów (gdyby to potwierdzenie zaginęło w sieci, a nie sam pakiet z danymi) i pilnuje limitu maksymalnie 5 jednoczesnych połączeń od różnych klientów.
+
+Mamy nadzieję, że ten test przebiegnie pomyślnie! Każda paczka powinna wyświetlić się na serwerze jako "Part X", a ostatnia jako "Last Part X". Po zakończeniu transmisji serwer automatycznie zwolni slot dla kolejnego klienta, a klient zamknie się z kodem sukcesu. Powodzenia na laboratoriach z systemów operacyjnych!
