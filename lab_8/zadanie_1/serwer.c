@@ -62,9 +62,7 @@ void server_work(int fd) {
             if (chunkNo > clients[index].chunkNo + 1) {
                 continue;
             } else if (chunkNo == clients[index].chunkNo + 1) {
-                // POPRAWKA: ntohl zamiast nthol
                 int ending_flag = ntohl(*(((int32_t*)buf) + 1));
-
                 if (ending_flag) { // jesli to ostatnia paczka
                     printf("Last Part %d\n%s\n", chunkNo, buf + 2 * sizeof(int32_t));
                     clients[index].free = 1; // POPRAWKA: clients zamiast con
